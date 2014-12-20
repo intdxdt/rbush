@@ -29,6 +29,7 @@ function RBush(maxEntries, format) {
   if (format) {
     _initFormat(this, format);
   }
+  //TODO: for porting purposes .....
   this.all    = all.bind(null, this);
   this.search = search.bind(null, this);
   this.load   = load.bind(null, this);
@@ -37,6 +38,7 @@ function RBush(maxEntries, format) {
   this.remove = remove.bind(null, this);
   this.toJSON = toJSON.bind(null, this);
   this.fromJSON = fromJSON.bind(null, this);
+  //for porting purposes .....
 
   clear(this);
 }
@@ -44,6 +46,9 @@ function RBush(maxEntries, format) {
  * @description prototype
  */
 var proto = RBush.prototype;
+proto.compareMinX  = compareMinX;
+proto.compareMinY  = compareMinY;
+proto.toBBox       = toBBox;
 
 function toJSON(tree) {
   return tree.data;
@@ -54,9 +59,7 @@ function fromJSON(tree, data) {
   return tree;
 }
 
-proto.compareMinX  = compareMinX;
-proto.compareMinY  = compareMinY;
-proto.toBBox       = toBBox;
+
 
 
 function all(tree) {
