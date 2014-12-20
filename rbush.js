@@ -14,7 +14,6 @@ module.exports = RBush;
  * @description RBush
  * @param maxEntries
  * @param format
- * @returns {RBush}
  * @constructor
  */
 function RBush(maxEntries, format) {
@@ -28,25 +27,48 @@ function RBush(maxEntries, format) {
   this._minEntries = Math.max(2, Math.ceil(this._maxEntries * 0.4));
 
   if (format) {
-    this._initFormat(format);
+    _initFormat(this, format);
   }
+  this.all    = all.bind(null, this);
+  this.search = search.bind(null, this);
+  this.load   = load.bind(null, this);
+  this.insert = insert.bind(null, this);
+  this.clear  = clear.bind(null, this);
+  this.remove = remove.bind(null, this);
+  this.toJSON = toJSON.bind(null, this);
+  this.fromJSON = fromJSON.bind(null, this);
 
-  this.clear();
+  clear(this);
 }
 /**
  * @description prototype
  */
 var proto = RBush.prototype;
 
-proto.all = function () {
-  return this._all(this.data, []);
-};
+function toJSON(tree) {
+  return tree.data;
+}
 
-proto.search = function (bbox) {
+function fromJSON(tree, data) {
+  tree.data = data;
+  return tree;
+}
 
-  var node = this.data,
+proto.compareMinX  = compareMinX;
+proto.compareMinY  = compareMinY;
+proto.toBBox       = toBBox;
+
+
+function all(tree) {
+  "use strict";
+  return _all(tree.data, []);
+}
+
+function search(tree, bbox) {
+
+  var node = tree.data,
       result = [],
-      toBBox = this.toBBox;
+      toBBox = tree.toBBox;
 
   if (!intersects(bbox, node.bbox)) {
     return result;
@@ -66,7 +88,7 @@ proto.search = function (bbox) {
           result.push(child);
         }
         else if (contains(bbox, childBBox)) {
-          this._all(child, result);
+          _all(child, result);
         }
         else {
           nodesToSearch.push(child);
@@ -77,72 +99,73 @@ proto.search = function (bbox) {
   }
 
   return result;
-};
+}
 
-proto.load = function (data) {
+function load(tree, data) {
   if (!(data && data.length)) {
-    return this;
+    return tree;
   }
 
-  if (data.length < this._minEntries) {
+  if (data.length < tree._minEntries) {
     for (var i = 0, len = data.length; i < len; i++) {
-      this.insert(data[i]);
+      insert(tree, data[i]);
     }
-    return this;
+    return tree;
   }
 
   // recursively build the tree with the given data from stratch using OMT algorithm
-  var node = this._build(data.slice(), 0, data.length - 1, 0);
+  var node = _build(tree, data.slice(), 0, data.length - 1, 0);
 
-  if (!this.data.children.length) {
+  if (!tree.data.children.length) {
     // save as is if tree is empty
-    this.data = node;
+    tree.data = node;
 
   }
-  else if (this.data.height === node.height) {
+  else if (tree.data.height === node.height) {
     // split root if trees have the same height
-    this._splitRoot(this.data, node);
+    _splitRoot(tree, tree.data, node);
 
   }
   else {
-    if (this.data.height < node.height) {
+    if (tree.data.height < node.height) {
       // swap trees if inserted one is bigger
-      var tmpNode = this.data;
-      this.data = node;
+      var tmpNode = tree.data;
+      tree.data = node;
       node = tmpNode;
     }
 
     // insert the small tree into the large tree at appropriate level
-    this._insert(node, this.data.height - node.height - 1, true);
+    _insert(tree, node, tree.data.height - node.height - 1, true);
   }
 
-  return this;
-};
+  return tree;
+}
 
-proto.insert = function (item) {
+function insert(tree, item) {
   if (item) {
-    this._insert(item, this.data.height - 1);
+    _insert(tree, item, tree.data.height - 1);
   }
-  return this;
-};
+  return tree;
+}
 
-proto.clear = function () {
-  this.data = {
+function clear(tree) {
+  "use strict";
+  tree.data = {
     children: [],
     height  : 1,
     bbox    : empty(),
     leaf    : true
   };
-  return this;
-};
+  return tree;
+}
 
-proto.remove = function (item) {
+function remove(tree, item) {
   if (!item) {
-    return this;
+    return tree;
   }
 
-  var node = this.data,
-      bbox = this.toBBox(item),
+  var node = tree.data,
+      bbox = tree.toBBox(item),
       path = [],
       indexes = [],
       i, parent, index, goingUp;
@@ -164,8 +187,8 @@ proto.remove = function (item) {
         // item found, remove the item and condense tree upwards
         node.children.splice(index, 1);
         path.push(node);
-        this._condense(path);
-        return this;
+        _condense(tree, path);
+        return tree;
       }
     }
 
@@ -188,22 +211,16 @@ proto.remove = function (item) {
     } // nothing found
   }
 
-  return this;
-};
+  return tree;
+}
 
-proto.toBBox = function (item) { return item; };
+function toBBox(item) { return item; }
 
-proto.compareMinX = function (a, b) { return a[0] - b[0]; };
-proto.compareMinY = function (a, b) { return a[1] - b[1]; };
+function compareMinX( a, b) { return a[0] - b[0]; }
 
-proto.toJSON = function () { return this.data; };
+function compareMinY( a, b) { return a[1] - b[1]; }
 
-proto.fromJSON = function (data) {
-  this.data = data;
-  return this;
-};
-
-proto._all = function (node, result) {
+function _all(node, result) {
   var nodesToSearch = [];
   while (node) {
     if (node.leaf) {
@@ -216,12 +233,13 @@ proto._all = function (node, result) {
     node = nodesToSearch.pop();
   }
   return result;
-};
+}
 
-proto._build = function (items, left, right, height) {
+function _build(tree, items, left, right, height) {
+  "use strict";
 
   var N = right - left + 1,
-      M = this._maxEntries,
+      M = tree._maxEntries,
       node;
 
   if (N <= M) {
@@ -232,7 +250,7 @@ proto._build = function (items, left, right, height) {
       bbox    : null,
       leaf    : true
     };
-    calcBBox(node, this.toBBox);
+    calcBBox(node, tree.toBBox);
     return node;
   }
 
@@ -258,29 +276,30 @@ proto._build = function (items, left, right, height) {
       N1 = N2 * Math.ceil(Math.sqrt(M)),
       i, j, right2, right3;
 
-  multiSelect(items, left, right, N1, this.compareMinX);
+  multiSelect(items, left, right, N1, tree.compareMinX);
 
   for (i = left; i <= right; i += N1) {
 
     right2 = Math.min(i + N1 - 1, right);
 
-    multiSelect(items, i, right2, N2, this.compareMinY);
+    multiSelect(items, i, right2, N2, tree.compareMinY);
 
     for (j = i; j <= right2; j += N2) {
 
       right3 = Math.min(j + N2 - 1, right2);
 
       // pack each entry recursively
-      node.children.push(this._build(items, j, right3, height - 1));
+      node.children.push(_build(tree, items, j, right3, height - 1));
     }
   }
 
-  calcBBox(node, this.toBBox);
+  calcBBox(node, tree.toBBox);
 
   return node;
-};
+}
 
-proto._chooseSubtree = function (bbox, node, level, path) {
+function _chooseSubtree(bbox, node, level, path) {
+  "use strict";
 
   var i, len, child, targetNode, area, enlargement, minArea, minEnlargement;
 
@@ -318,16 +337,16 @@ proto._chooseSubtree = function (bbox, node, level, path) {
   }
 
   return node;
-};
+}
 
-proto._insert = function (item, level, isNode) {
+function _insert(tree, item, level, isNode) {
 
-  var toBBox = this.toBBox,
+  var toBBox = tree.toBBox,
       bbox = isNode ? item.bbox : toBBox(item),
       insertPath = [];
 
   // find the best node for accommodating the item, saving all nodes along the path too
-  var node = this._chooseSubtree(bbox, this.data, level, insertPath);
+  var node = _chooseSubtree(bbox, tree.data, level, insertPath);
 
   // put the item into the node
   node.children.push(item);
@@ -335,8 +354,8 @@ proto._insert = function (item, level, isNode) {
 
   // split on node overflow; propagate upwards if necessary
   while (level >= 0) {
-    if (insertPath[level].children.length > this._maxEntries) {
-      this._split(insertPath, level);
+    if (insertPath[level].children.length > tree._maxEntries) {
+      _split(tree, insertPath, level);
       level--;
     }
     else {
@@ -345,20 +364,21 @@ proto._insert = function (item, level, isNode) {
   }
 
   // adjust bboxes along the insertion path
-  this._adjustParentBBoxes(bbox, insertPath, level);
-};
+  _adjustParentBBoxes(bbox, insertPath, level);
+}
 
 // split overflowed node into two
-proto._split = function (insertPath, level) {
+function _split(tree, insertPath, level) {
+  "use strict";
 
   var node = insertPath[level],
       M = node.children.length,
-      m = this._minEntries;
+      m = tree._minEntries;
 
-  this._chooseSplitAxis(node, m, M);
+  _chooseSplitAxis(tree, node, m, M);
 
   var newNode = {
-    children: node.children.splice(this._chooseSplitIndex(node, m, M)),
+    children: node.children.splice(_chooseSplitIndex(tree, node, m, M)),
     height  : node.height
   };
 
@@ -366,35 +386,38 @@ proto._split = function (insertPath, level) {
     newNode.leaf = true;
   }
 
-  calcBBox(node, this.toBBox);
-  calcBBox(newNode, this.toBBox);
+  calcBBox(node, tree.toBBox);
+  calcBBox(newNode, tree.toBBox);
 
   if (level) {
     insertPath[level - 1].children.push(newNode);
   }
   else {
-    this._splitRoot(node, newNode);
+    _splitRoot(tree, node, newNode);
   }
-};
+}
 
-proto._splitRoot = function (node, newNode) {
+function _splitRoot(tree, node, newNode) {
+  "use strict";
+
   // split root node
-  this.data = {
+  tree.data = {
     children: [node, newNode],
     height  : node.height + 1
   };
-  calcBBox(this.data, this.toBBox);
-};
+  calcBBox(tree.data, tree.toBBox);
+}
 
-proto._chooseSplitIndex = function (node, m, M) {
+function _chooseSplitIndex(tree, node, m, M) {
+  "use strict";
 
   var i, bbox1, bbox2, overlap, area, minOverlap, minArea, index;
 
   minOverlap = minArea = Infinity;
 
   for (i = m; i <= M - m; i++) {
-    bbox1 = distBBox(node, 0, i, this.toBBox);
-    bbox2 = distBBox(node, i, M, this.toBBox);
+    bbox1 = distBBox(node, 0, i, tree.toBBox);
+    bbox2 = distBBox(node, i, M, tree.toBBox);
 
     overlap = intersectionArea(bbox1, bbox2);
     area = bboxArea(bbox1) + bboxArea(bbox2);
@@ -417,29 +440,31 @@ proto._chooseSplitIndex = function (node, m, M) {
   }
 
   return index;
-};
+}
 
 // sorts node children by the best axis for split
-proto._chooseSplitAxis = function (node, m, M) {
+function _chooseSplitAxis(tree, node, m, M) {
+  "use strict";
 
-  var compareMinX = node.leaf ? this.compareMinX : compareNodeMinX,
-      compareMinY = node.leaf ? this.compareMinY : compareNodeMinY,
-      xMargin = this._allDistMargin(node, m, M, compareMinX),
-      yMargin = this._allDistMargin(node, m, M, compareMinY);
+  var compareMinX = node.leaf ? tree.compareMinX : compareNodeMinX,
+      compareMinY = node.leaf ? tree.compareMinY : compareNodeMinY,
+      xMargin = _allDistMargin(tree, node, m, M, compareMinX),
+      yMargin = _allDistMargin(tree, node, m, M, compareMinY);
 
   // if total distributions margin value is minimal for x, sort by minX,
   // otherwise it's already sorted by minY
   if (xMargin < yMargin) {
     node.children.sort(compareMinX);
   }
-};
+}
 
 // total margin of all possible split distributions where each node is at least m full
-proto._allDistMargin = function (node, m, M, compare) {
+function _allDistMargin(tree, node, m, M, compare) {
+  "use strict";
 
   node.children.sort(compare);
 
-  var toBBox = this.toBBox,
+  var toBBox = tree.toBBox,
       leftBBox = distBBox(node, 0, m, toBBox),
       rightBBox = distBBox(node, M - m, M, toBBox),
       margin = bboxMargin(leftBBox) + bboxMargin(rightBBox),
@@ -458,16 +483,16 @@ proto._allDistMargin = function (node, m, M, compare) {
   }
 
   return margin;
-};
+}
 
-proto._adjustParentBBoxes = function (bbox, path, level) {
+function _adjustParentBBoxes(bbox, path, level) {
   // adjust bboxes along the given tree path
   for (var i = level; i >= 0; i--) {
     extend(path[i].bbox, bbox);
   }
-};
+}
 
-proto._condense = function (path) {
+function _condense(tree, path) {
   // go through the path, removing empty nodes and updating bboxes
   for (var i = path.length - 1, siblings; i >= 0; i--) {
     if (path[i].children.length === 0) {
@@ -477,40 +502,42 @@ proto._condense = function (path) {
 
       }
       else {
-        this.clear();
+        clear(tree);
       }
 
     }
     else {
-      calcBBox(path[i], this.toBBox);
+      calcBBox(path[i], tree.toBBox);
     }
   }
-};
+}
 
-proto._initFormat = function (format) {
+function _initFormat(tree, format) {
+  "use strict";
   // data format (minX, minY, maxX, maxY accessors)
-
   // uses eval-type function compilation instead of just accepting a toBBox function
   // because the algorithms are very sensitive to sorting functions performance,
   // so they should be dead simple and without inner calls
-
   // jshint evil: true
 
-  var compareArr = ['return a', ' - b', ';'];
+  var compareArr    = ['return a', ' - b', ';'];
+  tree.compareMinX  = new Function('a', 'b', compareArr.join(format[0]));
+  tree.compareMinY  = new Function('a', 'b', compareArr.join(format[1]));
+  tree.toBBox       = new Function('a', 'return [a' + format.join(', a') + '];');
+}
 
-  this.compareMinX = new Function('a', 'b', compareArr.join(format[0]));
-  this.compareMinY = new Function('a', 'b', compareArr.join(format[1]));
-
-  this.toBBox = new Function('a', 'return [a' + format.join(', a') + '];');
-};
+//-----------------------------------------------------------------------------------------
 
 // calculate node's bbox from bboxes of its children
 function calcBBox(node, toBBox) {
+  "use strict";
   node.bbox = distBBox(node, 0, node.children.length, toBBox);
 }
 
 // min bounding rectangle of node children from k to p-1
 function distBBox(node, k, p, toBBox) {
+  "use strict";
+
   var bbox = empty();
 
   for (var i = k, child; i < p; i++) {
@@ -533,13 +560,21 @@ function extend(a, b) {
   return a;
 }
 
-function compareNodeMinX(a, b) { return a.bbox[0] - b.bbox[0]; }
+function compareNodeMinX(a, b) {
+  return a.bbox[0] - b.bbox[0];
+}
 
-function compareNodeMinY(a, b) { return a.bbox[1] - b.bbox[1]; }
+function compareNodeMinY(a, b) {
+  return a.bbox[1] - b.bbox[1];
+}
 
-function bboxArea(a) { return (a[2] - a[0]) * (a[3] - a[1]); }
+function bboxArea(a) {
+  return (a[2] - a[0]) * (a[3] - a[1]);
+}
 
-function bboxMargin(a) { return (a[2] - a[0]) + (a[3] - a[1]); }
+function bboxMargin(a) {
+  return (a[2] - a[0]) + (a[3] - a[1]);
+}
 
 function enlargedArea(a, b) {
   return (Math.max(b[2], a[2]) - Math.min(b[0], a[0])) *

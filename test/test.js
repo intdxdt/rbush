@@ -7,7 +7,6 @@ function sortedEqual(t, a, b, compare) {
 
 function someData(n) {
     var data = [];
-
     for (var i = 0; i < n; i++) {
         data.push([i, i, i, i]);
     }
@@ -61,7 +60,6 @@ t('constructor uses 9 max entries by default', function (t) {
 });
 
 t('#toBBox, #compareMinX, #compareMinY can be overriden to allow custom data structures', function (t) {
-
     var tree = rbush(4);
     tree.toBBox = function (item) {
         return [item.minLng, item.minLat, item.maxLng, item.maxLat];
@@ -117,7 +115,6 @@ t('#toBBox, #compareMinX, #compareMinY can be overriden to allow custom data str
 });
 
 t('#load bulk-loads the given data given max node entries and forms a proper search tree', function (t) {
-
     var tree = rbush(4).load(data);
     sortedEqual(t, tree.all(), rbush(4).fromJSON(testTree).all());
 
@@ -125,7 +122,6 @@ t('#load bulk-loads the given data given max node entries and forms a proper sea
 });
 
 t('#load uses standard insertion when given a low number of items', function (t) {
-
     var tree = rbush(8)
         .load(data)
         .load(data.slice(0, 3));
@@ -249,8 +245,8 @@ t('#insert adds an item to an existing tree correctly', function (t) {
 
 t('#insert does nothing if given undefined', function (t) {
     t.same(
-        rbush().load(data),
-        rbush().load(data).insert());
+        rbush().load(data).data,
+        rbush().load(data).insert().data);
     t.end();
 });
 
@@ -289,14 +285,14 @@ t('#remove removes items correctly', function (t) {
 });
 t('#remove does nothing if nothing found', function (t) {
     t.same(
-        rbush().load(data),
-        rbush().load(data).remove([13, 13, 13, 13]));
+        rbush().load(data).data,
+        rbush().load(data).remove([13, 13, 13, 13]).data);
     t.end();
 });
 t('#remove does nothing if given undefined', function (t) {
     t.same(
-        rbush().load(data),
-        rbush().load(data).remove());
+        rbush().load(data).data,
+        rbush().load(data).remove().data);
     t.end();
 });
 t('#remove brings the tree to a clear state when removing everything one by one', function (t) {
